@@ -19,10 +19,10 @@ O CONTASKI define um mecanismo de agrupamento cooperativo para redes IIoT basead
 
 | Aspecto | Original (yanuehara/contaski) | Este repositório |
 |---|---|---|
-| Função de similaridade | `capabilitiesSimilarityUFD` | `capabilitiesSimilarity` (Jaccard — Eq. 1 do artigo) |
+| Função de similaridade | `capabilitiesSimilarityUFD` | `capabilitiesSimilarity` (Eq. 1 do artigo) |
 | Eleição de líder | Por vizinhança | Por vizinhança + capacidades + IP (3 critérios) |
 
-A principal correção em relação ao original é o uso da **função de similaridade correta** (`capabilitiesSimilarity`, coeficiente de Jaccard), conforme a Equação 1 do artigo, em substituição à função `capabilitiesSimilarityUFD` utilizada na implementação original.
+A principal correção em relação ao original é o uso da **função de similaridade correta** (`capabilitiesSimilarity`), conforme a Equação 1 do artigo, em substituição à função `capabilitiesSimilarityUFD` utilizada na implementação original.
 
 ---
 
@@ -44,10 +44,10 @@ Implementação do CONTASKI na versão NS-3 3.29, com as correções aplicadas e
 
 **Similaridade de capacidades:**
 
-Utiliza o coeficiente de Jaccard:
+Utiliza a Equação 1 do artigo (Chen et al. 2016):
 
 ```
-sim(A, B) = |A ∩ B| / |A ∪ B|
+sim(ob1, ob2) = |C_ob1 ∩ C_ob2| / √(|C_ob1| × |C_ob2|)
 ```
 
 Nós com `sim ≥ 0,95` são agrupados no mesmo cluster. O líder é eleito em cascata por: (1) maior número de vizinhos, (2) maior número de capacidades, (3) menor endereço IPv6.
