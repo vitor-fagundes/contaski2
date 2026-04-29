@@ -15,6 +15,15 @@ using namespace ns3;
 NS_LOG_COMPONENT_DEFINE("Contaski_V1_Nodes");
 
 namespace nr2{
+
+    // ADICIONADO: Limiar de similaridade conforme Figura 3 do artigo
+    // S1 = Fraco:  0.65 - 0.82
+    // S2 = Médio:  0.82 - 1.00
+    // S3 = Forte:  1.00
+    // NOTA: Usando 0.87 para formar clusters mais homogêneos
+    // Com 0.65, nós com apenas capacidades básicas em comum entram no mesmo cluster
+    const double SIMILARITY_THRESHOLD = 0.95;
+
     Ipv6Address NodeApplication::GetNodeIpAddress(){
         Ptr <Node> PtrNode = this->GetNode();
         Ptr<Ipv6> ipv6 = PtrNode->GetObject<Ipv6> ();
@@ -188,7 +197,7 @@ namespace nr2{
         this->sendMessageHelper(MessageTypes::Beacon, addr, (uint8_t*)buffer.c_str(), buffer.size()+1);
         //NS_LOG_INFO("N: BS " << this->GetNodeIpAddress() << " (" << buffer << ")");
 
-        if((Seconds(60.0) - Simulator::Now()) > 0  ){
+        if ((Seconds(60.0) - Simulator::Now()) > Seconds(0.0)) {
             Simulator::Schedule(Seconds(0.5), &NodeApplication::beacon, this);
         }
     }
@@ -200,7 +209,7 @@ namespace nr2{
         //this->sendBroadcastMessageHelper(MessageTypes::CapabilityDissemination, (uint8_t*)serializedCap.c_str(), serializedCap.size()+1);
         this->sendMessageHelper(MessageTypes::CapabilityDissemination, addr, (uint8_t*)serializedCap.c_str(), serializedCap.size()+1);
 
-        if((Seconds(90.0) - Simulator::Now()) > 0){
+        if ((Seconds(90.0) - Simulator::Now()) > Seconds(0.0)) {
             Simulator::Schedule(Seconds(0.5), &NodeApplication::disseminateCapabilities, this);
         }
     }
@@ -211,8 +220,10 @@ namespace nr2{
         for (auto const& neigh: *this->neighCapabilities){
             auto neighCap = neigh.second;
             capabilitiesVector* inter = new capabilitiesVector();
-            //double sim = capabilitiesSimilarity(this->capabilities, &neighCap, inter);
-            double sim = capabilitiesSimilarityUFD(this->capabilities, &neighCap, inter);
+            
+            // CORRIGIDO: Usar capabilitiesSimilarity (Equação 1 do artigo)
+            // ao invés de capabilitiesSimilarityUFD
+            double sim = capabilitiesSimilarity(this->capabilities, &neighCap, inter);
 
             //auto pair = make_pair(sim, neigh.first);
             auto pair = new std::pair<double, Ipv6Address>(sim, neigh.first);
@@ -228,13 +239,13 @@ namespace nr2{
         //float mode = this->getSimilarityMode();
         std::sort(this->neighSimilatiries->begin(), this->neighSimilatiries->end());
         //double maxSim = (* --this->neighSimilatiries->end())->first;
-        double maxSim = 1.0;
+        //double maxSim = 1.0;  // REMOVIDO: Não mais usado
 
         //Filter in nodes between mode and 1
         for (auto it = this->neighSimilatiries->begin(); it != this->neighSimilatiries->end(); it++){
-            //if((*it)->first == maxSim){
-            double sim = std::abs((*it)->first - maxSim);
-            if(sim < 0.000001){
+            // CORRIGIDO: Usar SIMILARITY_THRESHOLD (0.65) ao invés de comparar com maxSim = 1.0
+            // Antes: double sim = std::abs((*it)->first - maxSim); if(sim < 0.000001)
+            if((*it)->first >= SIMILARITY_THRESHOLD){
                 try{
                     //Join them into the cluster
                     (*this->clusterList)[(*it)->second] = this->neighList->at((*it)->second);
@@ -310,6 +321,9 @@ namespace nr2{
     Ipv6Address NodeApplication::tiebreakLeader(){
         Ipv6Address ipv6 = this->GetNodeIpAddress();
         Ipv6Address selectedLeader;
+        
+        // CORRIGIDO: Usar tamanho do cluster (clusterList->size()) ao invés de neighList->size()
+        // Isso garante consistência: todos os nós no cluster usam a mesma métrica
         (*this->clusterList)[ipv6] = this->neighList->size();
 
         /*auto leader = std::max(this->clusterList->begin(), this->clusterList->end(),
@@ -342,9 +356,19 @@ namespace nr2{
             //Tiebreak
             auto tiebraker = new std::map<Ipv6Address, int>;
             
-            for(auto leader: *leaderCandidates) {
-                auto capSize = (*this->neighCapabilities)[leader.first].size();
-                (*tiebraker)[leader.first] = capSize;
+            for(auto candidate: *leaderCandidates) {
+                if(candidate.first == ipv6){
+                    // Próprio nó: usar capacidades locais
+                    (*tiebraker)[candidate.first] = this->capabilities->size();
+                } else {
+                    // Vizinho: buscar em neighCapabilities
+                    auto it = this->neighCapabilities->find(candidate.first);
+                    if(it != this->neighCapabilities->end()){
+                        (*tiebraker)[candidate.first] = it->second.size();
+                    } else {
+                        (*tiebraker)[candidate.first] = 0;
+                    }
+                }
             }
             
             /*Ipv6Address maiorIp;
@@ -361,16 +385,45 @@ namespace nr2{
                     return it1->second < it2->second;
                 }
             );*/
-            auto leader2 = std::max_element(this->clusterList->begin(), this->clusterList->end(),
+            // CORRIGIDO: Usar tiebraker ao invés de clusterList para desempate por capacidades
+            auto leader2 = std::max_element(tiebraker->begin(), tiebraker->end(),
                 [](std::pair<Ipv6Address, int> a, std::pair<Ipv6Address, int> b){
                     return a.second < b.second;
                 }
             );
-
-            selectedLeader = leader2->first;
+            
+            int maxCap = leader2->second;
+            
+            // Filtrar todos com máximo de capacidades
+            std::vector<Ipv6Address> finalCandidates;
+            for(auto& c : *tiebraker){
+                if(c.second == maxCap){
+                    finalCandidates.push_back(c.first);
+                }
+            }
+            
+            // Desempate final por menor IP
+            if(finalCandidates.size() == 1){
+                selectedLeader = finalCandidates[0];
+            } else {
+                std::sort(finalCandidates.begin(), finalCandidates.end(),
+                    [](const Ipv6Address& a, const Ipv6Address& b){
+                        uint8_t bufA[16], bufB[16];
+                        a.GetBytes(bufA);
+                        b.GetBytes(bufB);
+                        return memcmp(bufA, bufB, 16) < 0;
+                    }
+                );
+                selectedLeader = finalCandidates[0];
+            }
+            
+            delete tiebraker;
         }
 
         NS_LOG_INFO("N: " << ipv6 << " CLSize " << this->clusterList->size() << " elects " << selectedLeader);
+        
+        delete leaderCandidates;
+        
         return selectedLeader;
    }
 
@@ -399,7 +452,7 @@ namespace nr2{
         ){
             this->sendMessageHelper(MessageTypes::TaskAccept, this->apAddress, 0, 0);
 
-            NS_LOG_INFO("N: LA " << this->GetNodeIpAddress() << ", " << task->getTid() << ", " << Time::From(Simulator::Now()).GetSeconds());
+            NS_LOG_INFO("N: LA " << this->GetNodeIpAddress() << ", " << task->getTid() << ", " << Simulator::Now().GetSeconds());
 
             for (auto node : *this->clusterList){
                 this->sendMessageHelper(MessageTypes::LeaderToCluster, node.first,

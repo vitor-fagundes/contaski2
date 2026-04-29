@@ -14,8 +14,11 @@ namespace nr2{
         auto it = std::set_intersection(cap1->begin(),cap1->end(),cap2->begin(),cap2->end(), intersection->begin());
 
         intersection->resize(it-intersection->begin());
-        //sim = (double)intersection->size() / sqrt(cap1->size()*cap2->size());
-        sim = (double)intersection->size() / (double)cap1->size();
+        
+        // CORRIGIDO: Equação 1 do artigo CONTASKI
+        // sim(ob1, ob2) = |Cob1 ∩ Cob2| / √(|Cob1| * |Cob2|)
+        // sim = (double)intersection->size() / (double)cap1->size();
+        sim = (double)intersection->size() / sqrt((double)cap1->size() * (double)cap2->size());
 
         inter = intersection;
         return sim;
@@ -54,7 +57,8 @@ namespace nr2{
         cap1Norm = sqrt(cap1Norm);
 
         double cap2Norm = 0.0;
-        for(auto cap: *cap1){
+        // CORRIGIDO: Antes iterava sobre cap1, agora itera sobre cap2
+        for(auto cap: *cap2){
             cap2Norm = cap2Norm + pow((*translateLayer)[cap], 2);
         }
         cap2Norm = sqrt(cap2Norm);

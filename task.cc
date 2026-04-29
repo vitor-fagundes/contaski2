@@ -14,7 +14,7 @@ namespace nr2{
     Task::Task(){
         std::random_device rd;
         std::default_random_engine generator{rd()};
-        std::uniform_int_distribution<int> distribution(3, 7);
+        std::uniform_int_distribution<int> distribution(3, 6);
         //std::uniform_int_distribution<int> duration(1, 2);
         //std::uniform_int_distribution<int> quorum(3, 5);
         this->taskId = generator();

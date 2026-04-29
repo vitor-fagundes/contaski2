@@ -205,7 +205,7 @@ void generateCap(int nNodes){
 
 	std::random_device rd;
 	std::default_random_engine generator{rd()};
-	std::uniform_int_distribution<int> distribution(3, 7);
+	std::uniform_int_distribution<int> distribution(3, 6);
 
 	nr2::capabilitiesVector* cap;
 

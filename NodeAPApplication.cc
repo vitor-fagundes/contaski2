@@ -139,8 +139,7 @@ namespace nr2{
 
         this->confirmationsSinceLastDispatch = 0;
 
-        NS_LOG_INFO("AP: TD " << this->currentDispatchedTask->getTid() << " " << Time::From(Simulator::Now()).GetSeconds());
-
+        NS_LOG_INFO("AP: TD " << this->currentDispatchedTask->getTid() << " " << Simulator::Now().GetSeconds());
         Simulator::Schedule(Seconds(10), &NodeAPApplication::taskConfirmation, this);
     }
 
@@ -161,7 +160,7 @@ namespace nr2{
                     break;
                 
                 case MessageTypes::TaskAccept:
-                    NS_LOG_INFO("AP: TA " << this->currentDispatchedTask->getTid() << ", " << fromIP << " " << Time::From(Simulator::Now()).GetSeconds());
+                    NS_LOG_INFO("AP: TA " << this->currentDispatchedTask->getTid() << ", " << fromIP << " " << Simulator::Now().GetSeconds());
                     this->confirmationsSinceLastDispatch++;
                     break;
 
